@@ -40,7 +40,7 @@ int main(int argc, char **argv)
                 canvas.at<cv::Vec3b>(i) = cv::Vec3b(100, 0, 0);
         }
 
-        int step = 100;
+        int step = 50;
 
         // - - - - - - - - - - - - VERTICAL - - - - - - - - - - - -
 
@@ -84,6 +84,8 @@ int main(int argc, char **argv)
                     float th = depth.at<float>(y, x2_best) * bla;
                     if (max_dist_sq > (th * th))
                         canvas.at<cv::Vec3b>(y, x2_best) = cv::Vec3b(0, 0, 255);
+
+                    x = x2_best + 1;
                 }
             }
         }
@@ -131,6 +133,8 @@ int main(int argc, char **argv)
 
                     if (max_dist_sq > (th * th))
                         canvas.at<cv::Vec3b>(y2_best, x) = cv::Vec3b(0, 255, 0);
+
+                    y = y2_best + 1;
                 }
             }
         }
