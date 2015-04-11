@@ -8,7 +8,7 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     rgbd::Client client;
-    client.intialize("rgbd");
+    client.intialize("/amigo/top_kinect/rgbd");
 
     float bla = 0.02;
 
@@ -40,102 +40,194 @@ int main(int argc, char **argv)
                 canvas.at<cv::Vec3b>(i) = cv::Vec3b(100, 0, 0);
         }
 
-        int step = 50;
 
-        // - - - - - - - - - - - - VERTICAL - - - - - - - - - - - -
+//        for(int x = 0; x < depth.cols; ++x)
+//        {
+//            for(int y = 1; y < depth.rows + 1; ++y)
+//            {
+//                float& d1 = depth.at<float>(y - 1, x);
+//                float& d2 = depth.at<float>(y, x);
+//                float& d3 = depth.at<float>(y + 1, x);
 
-        for(int y = 0; y < depth.rows; ++y)
-        {
-            for(int x = 0; x < depth.cols - step; x += step / 2)
-            {
-                geo::Vector3 p1_3d, p2_3d;
-                if (!view.getPoint3D(x, y, p1_3d) || !view.getPoint3D(x + step, y, p2_3d))
-                    continue;
+//                if (d1 != d1 || d1 == 0 || d2 != d2 || d2 == 0 || d3 != d3 || d3 == 0)
+//                    continue;
 
-                geo::Vec2 p1(p1_3d.x, -p1_3d.z);
-                geo::Vec2 p2(p2_3d.x, -p2_3d.z);
-                geo::Vec2 n = (p2 - p1).normalized();
+//                float diff1 = d2 - d1;
+//                float diff2 = d2 - d3;
 
-                int x2_best = -1;
-                float max_dist_sq = 0;
+//                if (diff1 * diff2 > 0) // && std::abs(diff1) < 0.1 && std::abs(diff2) < 0.1)
+//                    d2 = d1;
+//            }
+//        }
 
-                for(int x2 = x; x2 <= x + step; ++x2)
-                {
-                    geo::Vector3 p_3d;
-                    if (!view.getPoint3D(x2, y, p_3d))
-                        continue;
 
-                    geo::Vec2 p(p_3d.x, -p_3d.z);
 
-                    // Calculate distance of p to line (p1, p2)
-                    geo::Vec2 p1_p = p - p1;
-
-                    float dist_sq = (p1_p - (p1_p.dot(n) * n)).length2();
-
-                    if (dist_sq > max_dist_sq)
-                    {
-                        max_dist_sq = dist_sq;
-                        x2_best = x2;
-                    }
-                }
-
-                if (x2_best >= 0)
-                {
-                    float th = depth.at<float>(y, x2_best) * bla;
-                    if (max_dist_sq > (th * th))
-                        canvas.at<cv::Vec3b>(y, x2_best) = cv::Vec3b(0, 0, 255);
-
-                    x = x2_best + 1;
-                }
-            }
-        }
 
         // - - - - - - - - - - - - HORIZONTAL - - - - - - - - - - - -
 
+//        for(int y = 0; y < depth.rows; ++y)
+//        {
+//            step = 50;
+//            for(int x = 0; x < depth.cols - step; x += step / 2)
+//            {
+//                float d = depth.at<float>(y, x);
+//                if (d != d || d == 0)
+//                    continue;
+
+//                step = 50 / d;
+//                int x_end = std::min(depth.cols, x + step);
+
+//                geo::Vector3 p1_3d, p2_3d;
+//                if (!view.getPoint3D(x, y, p1_3d) || !view.getPoint3D(x_end, y, p2_3d))
+//                    continue;
+
+//                geo::Vec2 p1(p1_3d.x, -p1_3d.z);
+//                geo::Vec2 p2(p2_3d.x, -p2_3d.z);
+//                geo::Vec2 n = (p2 - p1).normalized();
+
+//                int x2_best = -1;
+//                float max_dist_sq = 0;
+
+//                for(int x2 = x; x2 <= x_end; ++x2)
+//                {
+//                    geo::Vector3 p_3d;
+//                    if (!view.getPoint3D(x2, y, p_3d))
+//                        continue;
+
+//                    geo::Vec2 p(p_3d.x, -p_3d.z);
+
+//                    // Calculate distance of p to line (p1, p2)
+//                    geo::Vec2 p1_p = p - p1;
+
+//                    float dist_sq = (p1_p - (p1_p.dot(n) * n)).length2();
+
+//                    if (dist_sq > max_dist_sq)
+//                    {
+//                        max_dist_sq = dist_sq;
+//                        x2_best = x2;
+//                    }
+//                }
+
+//                if (x2_best >= 0)
+//                {
+//                    float th = depth.at<float>(y, x2_best) * bla;
+//                    if (max_dist_sq > (th * th))
+//                        canvas.at<cv::Vec3b>(y, x2_best) = cv::Vec3b(0, 0, 255);
+
+//                    x = x2_best + 1;
+//                }
+//            }
+//        }
+
+        // - - - - - - - - - - - - VERTICAL - - - - - - - - - - - -
+
         for(int x = 0; x < depth.cols; ++x)
+//        for(int x = 320; x <= 320; ++x)
         {
-            for(int y = 0; y < depth.rows - step; y += step / 2)
+            int y = 0;
+            int y_start = 0;
+            float d_min, d_max, d_last;
+
+            // Find first valid value
+            for(; y < depth.rows; ++y)
             {
-                geo::Vector3 p1_3d, p2_3d;
-                if (!view.getPoint3D(x, y, p1_3d) || !view.getPoint3D(x, y + step, p2_3d))
+                float d = depth.at<float>(y, x);
+                if (d == d && d > 0)
+                {
+                    y_start = y;
+                    d_min = d;
+                    d_max = d;
+                    d_last = d;
+                    break;
+                }
+            }
+
+            for(; y < depth.rows; ++y)
+            {
+                int y_end = y;
+
+                float d = depth.at<float>(y, x);
+                if (d != d || d == 0)
                     continue;
 
-                geo::Vec2 p1(p1_3d.y, -p1_3d.z);
-                geo::Vec2 p2(p2_3d.y, -p2_3d.z);
-                geo::Vec2 n = (p2 - p1).normalized();
-
-                int y2_best = -1;
-                float max_dist_sq = 0;
-
-                for(int y2 = y; y2 <= y + step; ++y2)
+                int y_edge = -1;
+                bool check_edge = false;
+                if (std::abs(d - d_last) > 0.1 * d)   // TODO: magic number
                 {
-                    geo::Vector3 p_3d;
-                    if (!view.getPoint3D(x, y2, p_3d))
-                        continue;
+                    y_edge = y;
+                }
+                else
+                {
+                    d_min = std::min(d, d_min);
+                    d_max = std::max(d, d_max);
 
-                    geo::Vec2 p(p_3d.y, -p_3d.z);
+                    if (d_max - d_min > d * bla && y_end - y_start >= 30) // TODO: magic number
+                        check_edge = true;
+                }
 
-                    // Calculate distance of p to line (p1, p2)
-                    geo::Vec2 p1_p = p - p1;
-
-                    float dist_sq = (p1_p - (p1_p.dot(n) * n)).length2();
-
-                    if (dist_sq > max_dist_sq)
+                if (check_edge)
+                {
+                    geo::Vector3 p1_3d, p2_3d;
+                    if (view.getPoint3D(x, y_start, p1_3d) && view.getPoint3D(x, y_end, p2_3d))
                     {
-                        max_dist_sq = dist_sq;
-                        y2_best = y2;
+                        geo::Vec2 p1(p1_3d.y, -p1_3d.z);
+                        geo::Vec2 p2(p2_3d.y, -p2_3d.z);
+                        geo::Vec2 n = (p2 - p1).normalized();
+
+                        float max_dist_sq = 0;
+                        for(int y2 = y_start; y2 <= y_end; ++y2)
+                        {
+                            geo::Vector3 p_3d;
+                            if (view.getPoint3D(x, y2, p_3d))
+                            {
+                                geo::Vec2 p(p_3d.y, -p_3d.z);
+
+                                // Calculate distance of p to line (p1, p2)
+                                geo::Vec2 p1_p = p - p1;
+
+                                float dist_sq = (p1_p - (p1_p.dot(n) * n)).length2();
+
+                                if (dist_sq > max_dist_sq)
+                                {
+                                    max_dist_sq = dist_sq;
+                                    y_edge = y2;
+                                }
+                            }
+                        }
+
+//                        canvas.at<cv::Vec3b>(y_start + 1, x) = cv::Vec3b(255, 0, 0);
+//                        canvas.at<cv::Vec3b>(y_end - 1, x) = cv::Vec3b(0, 0, 255);
+
+                        if (y_edge >= 0)
+                        {
+                            float th = depth.at<float>(y_edge, x) * bla;
+                            if (max_dist_sq < (th * th))
+                                y_edge = -1;
+                        }
+
+                        if (y_edge == -1)
+                        {
+                            y_start = y;
+                            d_min = depth.at<float>(y, x);
+                            d_max = d_min;
+                        }
                     }
                 }
 
-                if (y2_best >= 0)
+                if (y_edge >= 0 || y_end - y >= 50) // TODO: magic number
                 {
-                    float th = depth.at<float>(y2_best, x) * bla;
+                    if (y_edge >= 0)
+                    {
+                        canvas.at<cv::Vec3b>(y_edge, x) = cv::Vec3b(0, 255, 0);
+                        y = y_edge;
+                    }
 
-                    if (max_dist_sq > (th * th))
-                        canvas.at<cv::Vec3b>(y2_best, x) = cv::Vec3b(0, 255, 0);
-
-                    y = y2_best + 1;
+                    y_start = y;
+                    d_min = depth.at<float>(y, x);
+                    d_max = d_min;
                 }
+
+                d_last = depth.at<float>(y, x);
             }
         }
 
