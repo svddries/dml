@@ -6,7 +6,7 @@
 
 int factor = 1;
 float bla = 0.02;
-float max_range = 5;
+float max_range = 4;
 int min_segment_size = 10 / factor; // in pixels
 int max_segment_size = 30 / factor; // in pixels
 
@@ -197,6 +197,8 @@ int main(int argc, char **argv)
         {
             int x = 0;
             int x_start;
+            float d_last;
+            int x_last;
 
             // Find first valid value
             for(; x < depth.cols; ++x)
@@ -205,6 +207,8 @@ int main(int argc, char **argv)
                 if (d == d && d > 0)
                 {
                     x_start = x;
+                    x_last = x;
+                    d_last = d;
                     break;
                 }
             }
@@ -217,18 +221,38 @@ int main(int argc, char **argv)
                 if (d != d || d == 0)
                     continue;
 
-                if (x_end - x_start >= max_segment_size)
+                bool check_edge = false;
+                int new_x_start;
+
+                if (std::abs(d - d_last) > d * 0.1)
+                {
+                    if (d < d_last && d < max_range)
+                        canvas.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
+                    else if (d_last < max_range)
+                        canvas.at<cv::Vec3b>(y, x_last) = cv::Vec3b(0, 0, 255);
+
+                    new_x_start = x;
+                    x_end--;
+                    check_edge = true;
+                }
+                else if (x_end - x_start >= max_segment_size)
+                {
+                    check_edge = true;
+                    new_x_start = (x_start + x_end) / 2;
+                }
+
+                if (check_edge)
                 {
                     int x_edge = findEdgeHorizontal(y, x_start, x_end, view, canvas);
 
                     if (x_edge >= 0)
-                    {
                         x = x_edge;
-                        x_start = (x_start + x_end) / 2;
-                    }
-                    else
-                        x_start = (x_start + x_end) / 2;
+
+                    x_start = new_x_start;
                 }
+
+                d_last = depth.at<float>(y, x);
+                x_last = x;
             }
         }
 
@@ -238,6 +262,8 @@ int main(int argc, char **argv)
         {
             int y = 0;
             int y_start;
+            float d_last;
+            int y_last;
 
             // Find first valid value
             for(; y < depth.rows; ++y)
@@ -246,6 +272,8 @@ int main(int argc, char **argv)
                 if (d == d && d > 0)
                 {
                     y_start = y;
+                    y_last = y;
+                    d_last = d;
                     break;
                 }
             }
@@ -258,18 +286,38 @@ int main(int argc, char **argv)
                 if (d != d || d == 0)
                     continue;
 
-                if (y_end - y_start >= max_segment_size)
+                bool check_edge = false;
+                int new_y_start;
+
+                if (std::abs(d - d_last) > d * 0.1)
+                {
+                    if (d < d_last && d < max_range)
+                        canvas.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                    else if (d_last < max_range)
+                        canvas.at<cv::Vec3b>(y_last, x) = cv::Vec3b(0, 255, 0);
+
+                    new_y_start = y;
+                    y_end--;
+                    check_edge = true;
+                }
+                else if (y_end - y_start >= max_segment_size)
+                {
+                    check_edge = true;
+                    new_y_start = (y_start + y_end) / 2;
+                }
+
+                if (check_edge)
                 {
                     int y_edge = findEdgeVertical(x, y_start, y_end, view, canvas);
 
                     if (y_edge >= 0)
-                    {
                         y = y_edge;
-                        y_start = (y_start + y_end) / 2;
-                    }
-                    else
-                        y_start = (y_start + y_end) / 2;
+
+                    y_start = new_y_start;
                 }
+
+                d_last = depth.at<float>(y, x);
+                y_last = y;
             }
         }
 
