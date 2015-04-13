@@ -179,11 +179,10 @@ int main(int argc, char **argv)
         // - - - - - - - - - - - - VERTICAL - - - - - - - - - - - -
 
         for(int x = 0; x < depth.cols; ++x)
-//        for(int x = 320; x <= 320; ++x)
         {
             int y = 0;
-            int y_start = 0;
-            float d_min, d_max, d_last;
+            int y_start;
+            float d_last;
 
             // Find first valid value
             for(; y < depth.rows; ++y)
@@ -192,8 +191,6 @@ int main(int argc, char **argv)
                 if (d == d && d > 0 && d < max_range)
                 {
                     y_start = y;
-                    d_min = d;
-                    d_max = d;
                     d_last = d;
                     break;
                 }
@@ -208,44 +205,29 @@ int main(int argc, char **argv)
                     continue;
 
                 int y_edge = -1;
-                bool check_edge = false;
                 if (std::abs(d - d_last) > 0.1 * d)   // TODO: magic number
                 {
                     y_edge = y;
                 }
                 else
                 {
-                    d_min = std::min(d, d_min);
-                    d_max = std::max(d, d_max);
-
-//                    if (d_max - d_min > d * bla && y_end - y_start >= 30) // TODO: magic number
                     if (y_end - y_start >= 30) // TODO: magic number
-                        check_edge = true;
-                }
-
-                if (check_edge)
-                {
-                    y_edge = findEdgeVertical(x, y_start, y_end, view, canvas);
-
-                    if (y_edge == -1)
                     {
-                        y_start = (y_start + y_end) / 2;
-                        d_min = depth.at<float>(y_start, x);
-                        d_max = d_min;
+                        y_edge = findEdgeVertical(x, y_start, y_end, view, canvas);
+
+                        if (y_edge == -1)
+                        {
+                            y_start = (y_start + y_end) / 2;
+                        }
                     }
                 }
 
-                if (y_edge >= 0 || y_end - y >= 50) // TODO: magic number
+                if (y_edge >= 0)
                 {
-                    if (y_edge >= 0)
-                    {
-                        canvas.at<cv::Vec3b>(y_edge, x) = cv::Vec3b(0, 255, 0);
-                        y = y_edge;
-                    }
+                    canvas.at<cv::Vec3b>(y_edge, x) = cv::Vec3b(0, 255, 0);
+                    y = y_edge;
 
                     y_start = (y_start + y_end) / 2;
-                    d_min = depth.at<float>(y_start, x);
-                    d_max = d_min;
                 }
 
                 d_last = depth.at<float>(y, x);
