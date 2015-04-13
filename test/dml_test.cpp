@@ -4,14 +4,17 @@
 
 #include <tue/profiling/timer.h>
 
+int factor = 1;
 float bla = 0.02;
 float max_range = 5;
+int min_segment_size = 10 / factor; // in pixels
+int max_segment_size = 30 / factor; // in pixels
 
 // ----------------------------------------------------------------------------------------------------
 
 int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv::Mat& canvas)
 {
-    if (x_end - x_start < 10) // TODO: magic number
+    if (x_end - x_start < min_segment_size)
         return -1;
 
     geo::Vector3 p1_3d, p2_3d;
@@ -69,7 +72,7 @@ int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv:
 
 int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, cv::Mat& canvas)
 {
-    if (y_end - y_start < 10) // TODO: magic number
+    if (y_end - y_start < min_segment_size)
         return -1;
 
     geo::Vector3 p1_3d, p2_3d;
@@ -141,9 +144,32 @@ int main(int argc, char **argv)
         if (!client.nextImage(image))
             continue;
 
-        cv::Mat depth = image.getDepthImage();
-        if (!depth.data)
+        cv::Mat depth_original = image.getDepthImage();
+        if (!depth_original.data)
             continue;
+
+        // - - - - - - - - - - - - - - - - - -
+        // Downsample depth image
+
+        cv::Mat depth;
+        if (factor == 1)
+        {
+            depth = depth_original;
+        }
+        else
+        {
+            depth = cv::Mat(depth_original.rows / factor, depth_original.cols / factor, CV_32FC1, 0.0);
+
+            for(int y = 0; y < depth.rows; ++y)
+            {
+                for(int x = 0; x < depth.cols; ++x)
+                {
+                    depth.at<float>(y, x) = depth_original.at<float>(y * factor, x * factor);
+                }
+            }
+        }
+
+        // - - - - - - - - - - - - - - - - - -
 
         rgbd::View view(image, depth.cols);
 
@@ -162,6 +188,8 @@ int main(int argc, char **argv)
 
         tue::Timer timer;
         timer.start();
+
+
 
         // - - - - - - - - - - - - HORIZONTAL - - - - - - - - - - - -
 
@@ -189,7 +217,7 @@ int main(int argc, char **argv)
                 if (d != d || d == 0)
                     continue;
 
-                if (x_end - x_start >= 30) // TODO: magic number
+                if (x_end - x_start >= max_segment_size)
                 {
                     int x_edge = findEdgeHorizontal(y, x_start, x_end, view, canvas);
 
@@ -230,7 +258,7 @@ int main(int argc, char **argv)
                 if (d != d || d == 0)
                     continue;
 
-                if (y_end - y_start >= 30) // TODO: magic number
+                if (y_end - y_start >= max_segment_size)
                 {
                     int y_edge = findEdgeVertical(x, y_start, y_end, view, canvas);
 
