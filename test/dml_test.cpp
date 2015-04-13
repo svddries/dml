@@ -9,10 +9,45 @@ float bla = 0.02;
 float max_range = 4;
 int min_segment_size = 10 / factor; // in pixels
 int max_segment_size = 30 / factor; // in pixels
+bool visualize = true;
 
 // ----------------------------------------------------------------------------------------------------
 
-int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv::Mat& canvas)
+struct EdgeFeature
+{
+    int x, y;
+    geo::Vector3 point;
+    int dx, dy;
+};
+
+// ----------------------------------------------------------------------------------------------------
+
+struct EdgeMap
+{
+    EdgeMap(const rgbd::View& view_) : view(view_) {}
+
+    void addEdgePoint(int x, int y, int dx, int dy)
+    {
+        geo::Vector3 p;
+        if (!view.getPoint3D(x, y, p))
+            return;
+
+        features.push_back(EdgeFeature());
+        EdgeFeature& f = features.back();
+        f.x = x;
+        f.y = y;
+        f.dx = dx;
+        f.dy = dy;
+        f.point = p;
+    }
+
+    const rgbd::View& view;
+    std::vector<EdgeFeature> features;
+};
+
+// ----------------------------------------------------------------------------------------------------
+
+int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, EdgeMap& edge_map)
 {
     if (x_end - x_start < min_segment_size)
         return -1;
@@ -58,11 +93,11 @@ int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv:
     if (max_dist_sq < (th * th))
         return -1;
 
-    // Visualize
-    canvas.at<cv::Vec3b>(y, x_edge) = cv::Vec3b(0, 0, 255);
+    // Add edge point
+    edge_map.addEdgePoint(x_edge, y, 1, 0);
 
     // Recursively find edges
-    findEdgeHorizontal(y, x_start, x_edge, view, canvas);
+    findEdgeHorizontal(y, x_start, x_edge, view, edge_map);
 
     return x_edge;
 }
@@ -70,7 +105,7 @@ int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv:
 // ----------------------------------------------------------------------------------------------------
 
 
-int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, cv::Mat& canvas)
+int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, EdgeMap& edge_map)
 {
     if (y_end - y_start < min_segment_size)
         return -1;
@@ -116,11 +151,11 @@ int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, cv::M
     if (max_dist_sq < (th * th))
         return -1;
 
-    // Visualize
-    canvas.at<cv::Vec3b>(y_edge, x) = cv::Vec3b(0, 255, 0);
+    // Add edge point
+    edge_map.addEdgePoint(x, y_edge, 0, 1);
 
     // Recursively find edges
-    findEdgeVertical(x, y_start, y_edge, view, canvas);
+    findEdgeVertical(x, y_start, y_edge, view, edge_map);
 
     return y_edge;
 }
@@ -173,23 +208,10 @@ int main(int argc, char **argv)
 
         rgbd::View view(image, depth.cols);
 
-        cv::Mat canvas(depth.rows, depth.cols, CV_8UC3, cv::Scalar(50, 50, 50));
-        for(int i = 0; i < depth.cols * depth.rows; ++i)
-        {
-            float d = depth.at<float>(i);
-            if (d == d)
-            {
-                int c = d / 8 * 255;
-                canvas.at<cv::Vec3b>(i) = cv::Vec3b(c, c, c);
-            }
-            else
-                canvas.at<cv::Vec3b>(i) = cv::Vec3b(100, 0, 0);
-        }
-
         tue::Timer timer;
         timer.start();
 
-
+        EdgeMap edge_map(view);
 
         // - - - - - - - - - - - - HORIZONTAL - - - - - - - - - - - -
 
@@ -227,9 +249,9 @@ int main(int argc, char **argv)
                 if (std::abs(d - d_last) > d * 0.1)
                 {
                     if (d < d_last && d < max_range)
-                        canvas.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 0, 255);
+                        edge_map.addEdgePoint(x, y, 1, 0);
                     else if (d_last < max_range)
-                        canvas.at<cv::Vec3b>(y, x_last) = cv::Vec3b(0, 0, 255);
+                        edge_map.addEdgePoint(x_last, y, 1, 0);
 
                     new_x_start = x;
                     x_end--;
@@ -243,7 +265,7 @@ int main(int argc, char **argv)
 
                 if (check_edge)
                 {
-                    int x_edge = findEdgeHorizontal(y, x_start, x_end, view, canvas);
+                    int x_edge = findEdgeHorizontal(y, x_start, x_end, view, edge_map);
 
                     if (x_edge >= 0)
                         x = x_edge;
@@ -292,9 +314,9 @@ int main(int argc, char **argv)
                 if (std::abs(d - d_last) > d * 0.1)
                 {
                     if (d < d_last && d < max_range)
-                        canvas.at<cv::Vec3b>(y, x) = cv::Vec3b(0, 255, 0);
+                        edge_map.addEdgePoint(x, y, 0, 1);
                     else if (d_last < max_range)
-                        canvas.at<cv::Vec3b>(y_last, x) = cv::Vec3b(0, 255, 0);
+                        edge_map.addEdgePoint(x, y_last, 0, -1);
 
                     new_y_start = y;
                     y_end--;
@@ -308,7 +330,7 @@ int main(int argc, char **argv)
 
                 if (check_edge)
                 {
-                    int y_edge = findEdgeVertical(x, y_start, y_end, view, canvas);
+                    int y_edge = findEdgeVertical(x, y_start, y_end, view, edge_map);
 
                     if (y_edge >= 0)
                         y = y_edge;
@@ -321,11 +343,44 @@ int main(int argc, char **argv)
             }
         }
 
+        std::cout << std::endl;
         std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
+        std::cout << "Number of edge points = " << edge_map.features.size() << std::endl;
 
-        cv::imshow("depth", canvas);
+        if (visualize)
+        {
+            cv::Mat canvas(depth.rows, depth.cols, CV_8UC3, cv::Scalar(50, 50, 50));
+            for(int i = 0; i < depth.cols * depth.rows; ++i)
+            {
+                float d = depth.at<float>(i);
+                if (d == d)
+                {
+                    int c = d / 8 * 255;
+                    canvas.at<cv::Vec3b>(i) = cv::Vec3b(c, c, c);
+                }
+                else
+                    canvas.at<cv::Vec3b>(i) = cv::Vec3b(100, 0, 0);
+            }
 
-        cv::waitKey(3);
+            for(std::vector<EdgeFeature>::const_iterator it = edge_map.features.begin(); it != edge_map.features.end(); ++it)
+            {
+                const EdgeFeature& f = *it;
+
+                if (f.dx == -1)
+                    canvas.at<cv::Vec3b>(f.y, f.x) = cv::Vec3b(255, 0, 0);
+                else if (f.dx == 1)
+                    canvas.at<cv::Vec3b>(f.y, f.x) = cv::Vec3b(255, 255, 0);
+                else if (f.dy == -1)
+                    canvas.at<cv::Vec3b>(f.y, f.x) = cv::Vec3b(0, 255, 0);
+                else if (f.dy == 1)
+                    canvas.at<cv::Vec3b>(f.y, f.x) = cv::Vec3b(0, 255, 255);
+            }
+
+            cv::imshow("edges", canvas);
+
+            cv::waitKey(3);
+        }
+
     }
 
     ros::spin();
