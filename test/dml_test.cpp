@@ -9,6 +9,9 @@ float max_range = 5;
 
 int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv::Mat& canvas)
 {
+    if (x_end - x_start < 10) // TODO: magic number
+        return -1;
+
     geo::Vector3 p1_3d, p2_3d;
     if (!view.getPoint3D(x_start, y, p1_3d) || !view.getPoint3D(x_end, y, p2_3d))
         return -1;
@@ -64,6 +67,9 @@ int findEdgeHorizontal(int y, int x_start, int x_end, const rgbd::View view, cv:
 
 int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, cv::Mat& canvas)
 {
+    if (y_end - y_start < 10) // TODO: magic number
+        return -1;
+
     geo::Vector3 p1_3d, p2_3d;
     if (!view.getPoint3D(x, y_start, p1_3d) || !view.getPoint3D(x, y_end, p2_3d))
         return -1;
