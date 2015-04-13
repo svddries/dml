@@ -2,6 +2,8 @@
 #include "rgbd/View.h"
 #include <opencv2/highgui/highgui.hpp>
 
+#include <tue/profiling/timer.h>
+
 float bla = 0.02;
 float max_range = 5;
 
@@ -158,6 +160,9 @@ int main(int argc, char **argv)
                 canvas.at<cv::Vec3b>(i) = cv::Vec3b(100, 0, 0);
         }
 
+        tue::Timer timer;
+        timer.start();
+
         // - - - - - - - - - - - - HORIZONTAL - - - - - - - - - - - -
 
         for(int y = 0; y < depth.rows; ++y)
@@ -239,6 +244,8 @@ int main(int argc, char **argv)
                 }
             }
         }
+
+        std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
         cv::imshow("depth", canvas);
 
