@@ -7,14 +7,6 @@ float max_range = 5;
 
 int findEdgeVertical(int x, int y_start, int y_end, const rgbd::View view, cv::Mat& canvas, std::string indent = "")
 {
-    if (x == 320)
-        std::cout << indent << y_start << " - " << y_end << std::endl;
-
-//    if (indent.size() > 0)
-//        cv::line(canvas, cv::Point(x, y_start), cv::Point(x, y_end), cv::Scalar(255, 0, 0));
-//    else
-//        cv::line(canvas, cv::Point(x, y_start + 1), cv::Point(x, y_end - 1), cv::Scalar(0, 0, 255));
-
     geo::Vector3 p1_3d, p2_3d;
     if (!view.getPoint3D(x, y_start, p1_3d) || !view.getPoint3D(x, y_end, p2_3d))
         return -1;
