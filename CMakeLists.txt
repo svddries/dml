@@ -3,6 +3,7 @@ project(dml)
 
 find_package(catkin REQUIRED COMPONENTS
     rgbd
+    armadillo_matrix
 )
 
 # find_package(Boost REQUIRED COMPONENTS system program_options)
@@ -52,7 +53,7 @@ catkin_package(
 include_directories(
     include
     ${catkin_INCLUDE_DIRS}
-	${OpenCV_INCLUD_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
 )
 
 # add_library(library_name
@@ -64,4 +65,6 @@ include_directories(
 add_executable(dml_test test/dml_test.cpp)
 target_link_libraries(dml_test ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
+add_executable(dml_test_icp test/dml_test_icp.cpp)
+target_link_libraries(dml_test_icp ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
