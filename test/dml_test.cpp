@@ -2,6 +2,8 @@
 #include "rgbd/View.h"
 #include <opencv2/highgui/highgui.hpp>
 
+#include <pcl/features/feature.h>
+
 #include <tue/profiling/timer.h>
 
 int factor = 1;
@@ -346,6 +348,25 @@ int main(int argc, char **argv)
         std::cout << std::endl;
         std::cout << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
         std::cout << "Number of edge points = " << edge_map.features.size() << std::endl;
+
+        // ICP
+
+        tue::Timer timer_icp;
+        timer_icp.start();
+
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pc(new pcl::PointCloud<pcl::PointXYZ>);
+        pc->resize(edge_map.features.size());
+
+        for(unsigned int i = 0; i < edge_map.features.size(); ++i)
+        {
+            const EdgeFeature& f = edge_map.features[i];
+            pc->push_back(pcl::PointXYZ(f.point.x, f.point.y, f.point.z));
+        }
+
+        pcl::KdTreeFLANN<pcl::PointXYZ> tree;
+        tree.setInputCloud(pc);
+
+        std::cout << "ICP: " << timer_icp.getElapsedTimeInMilliSec() << " ms" << std::endl;
 
         if (visualize)
         {
