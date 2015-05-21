@@ -84,6 +84,16 @@ int main(int argc, char **argv)
         // Convert from ROS coordinate frame to geolib coordinate frame
         sensor_pose.R = sensor_pose.R * geo::Matrix3(1, 0, 0, 0, -1, 0, 0, 0, -1);
 
+        tf::Matrix3x3 m;
+        geo::convert(sensor_pose.R, m);
+
+        double roll, pitch, yaw;
+        m.getRPY(roll, pitch, yaw);
+
+        sensor_pose.R.setRPY(roll, 0, 0);
+
+        std::cout << roll << " " << pitch << " " << yaw << std::endl;
+
         // - - - - - - - - - - - - - - - - - -
 
         std::cout << sensor_pose << std::endl;
@@ -95,23 +105,35 @@ int main(int argc, char **argv)
         //                depth.at<float>(y, x) = 1.0 / ((float)y / depth.rows + 1.0);
 
         rgbd::View view(*rgbd_image, depth.cols);
+        const geo::DepthCamera& rasterizer = view.getRasterizer();
 
         cv::Mat canvas(depth.rows, depth.cols, CV_8UC3, cv::Scalar(0, 0, 0));
 
+        std::vector<float> ranges(depth.cols, 10);
+
         for(int x = 0; x < depth.cols; ++x)
         {
-
-            float min_depth = 10;
-            for(int y = 0; y < depth.rows - 240; ++y)
+            for(int y = 0; y < depth.rows; ++y)
             {
                 float d = depth.at<float>(y, x);
-                if (d > 0 && d == d)
-                {
-                    min_depth = std::min(d, min_depth);
-                }
-            }
+                if (d == 0 || d != d)
+                    continue;
 
-            geo::Vec2 p = geo::Vec2(view.getRasterizer().project2Dto3DX(x), 1) * min_depth;
+                geo::Vector3 p_sensor = rasterizer.project2Dto3D(x, y) * d;
+                geo::Vector3 p_floor = sensor_pose * p_sensor;
+
+                if (p_floor.z < 0.2) // simple floor filter
+                    continue;
+
+                int i = (rasterizer.getFocalLengthX() * p_floor.x + rasterizer.getOpticalTranslationX()) / p_floor.y + rasterizer.getOpticalCenterX();
+                if (i >= 0 && i < ranges.size())
+                    ranges[i] = std::min<float>(ranges[i], p_floor.y);
+            }
+        }
+
+        for(unsigned int i = 0; i < ranges.size(); ++i)
+        {
+            geo::Vec2 p = geo::Vec2(view.getRasterizer().project2Dto3DX(i), 1) * ranges[i];
             geo::Vec2 p_canvas(p.x * 50 + canvas.cols / 2, canvas.rows - p.y * 50);
 
             if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
