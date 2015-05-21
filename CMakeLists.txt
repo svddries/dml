@@ -68,3 +68,5 @@ target_link_libraries(dml_test ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 add_executable(dml_test_icp test/dml_test_icp.cpp)
 target_link_libraries(dml_test_icp ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
+add_executable(dml_test_poly test/dml_test_poly.cpp)
+target_link_libraries(dml_test_poly ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
