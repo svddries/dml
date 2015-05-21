@@ -100,10 +100,6 @@ int main(int argc, char **argv)
 
         cv::Mat depth = rgbd_image->getDepthImage();
 
-        //        for(int x = 0; x < depth.cols; ++x)
-        //            for(int y = 0; y < depth.rows; ++y)
-        //                depth.at<float>(y, x) = 1.0 / ((float)y / depth.rows + 1.0);
-
         rgbd::View view(*rgbd_image, depth.cols);
         const geo::DepthCamera& rasterizer = view.getRasterizer();
 
@@ -128,17 +124,22 @@ int main(int argc, char **argv)
                 int i = (rasterizer.getFocalLengthX() * p_floor.x + rasterizer.getOpticalTranslationX()) / p_floor.y + rasterizer.getOpticalCenterX();
                 if (i >= 0 && i < ranges.size())
                     ranges[i] = std::min<float>(ranges[i], p_floor.y);
+
+                geo::Vec2 p_canvas(p_floor.x * 100 + canvas.cols / 2, canvas.rows - p_floor.y * 100);
+
+                if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
+                    canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(150, 150, 150);
             }
         }
 
         for(unsigned int i = 0; i < ranges.size(); ++i)
         {
             geo::Vec2 p = geo::Vec2(view.getRasterizer().project2Dto3DX(i), 1) * ranges[i];
-            geo::Vec2 p_canvas(p.x * 50 + canvas.cols / 2, canvas.rows - p.y * 50);
+            geo::Vec2 p_canvas(p.x * 100 + canvas.cols / 2, canvas.rows - p.y * 100);
 
             if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
             {
-                canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(255, 255, 255);
+                canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(0, 255, 0);
             }
         }
 
