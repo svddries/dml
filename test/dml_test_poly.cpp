@@ -99,11 +99,13 @@ int main(int argc, char **argv)
         std::cout << sensor_pose << std::endl;
 
         cv::Mat depth = rgbd_image->getDepthImage();
+        cv::Mat depth2 = depth.clone();
 
         rgbd::View view(*rgbd_image, depth.cols);
         const geo::DepthCamera& rasterizer = view.getRasterizer();
 
         cv::Mat canvas(depth.rows, depth.cols, CV_8UC3, cv::Scalar(0, 0, 0));
+        cv::Mat reprojection(400, depth.cols, CV_32FC1, 0.0);
 
         std::vector<float> ranges(depth.cols, 10);
 
@@ -121,31 +123,51 @@ int main(int argc, char **argv)
                 if (p_floor.z < 0.2) // simple floor filter
                     continue;
 
+                geo::Vec2 p_canvas(p_floor.x * 100 + canvas.cols / 2, canvas.rows - p_floor.y * 100);
+                if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
+                {
+                    int c = 10 + p_floor.z / 1.5 * 245;
+//                    std::cout << p_floor.z << " " << c << std::endl;
+                    cv::Vec3b& b = canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x);
+                    if (b[0] < c)
+                        b = cv::Vec3b(c, c, c);
+                }
+
                 int i = (rasterizer.getFocalLengthX() * p_floor.x + rasterizer.getOpticalTranslationX()) / p_floor.y + rasterizer.getOpticalCenterX();
                 if (i >= 0 && i < ranges.size())
+                {
                     ranges[i] = std::min<float>(ranges[i], p_floor.y);
 
-                geo::Vec2 p_canvas(p_floor.x * 100 + canvas.cols / 2, canvas.rows - p_floor.y * 100);
+                    cv::Point2i p_reprojection(i, (1.0 - p_floor.z / 2.0) * reprojection.rows);
+                    if (p_reprojection.y >= 0 && p_reprojection.y < reprojection.rows)
+                    {
+                        float& d = reprojection.at<float>(p_reprojection);
+                        if (d == 0 || p_floor.y < d)
+                            d = p_floor.y;
+                    }
+                }
 
-                if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
-                    canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(150, 150, 150);
+                if (i % 20 == 0)
+                    depth2.at<float>(y, x) = depth.at<float>(y, x) + 1;
             }
         }
 
         for(unsigned int i = 0; i < ranges.size(); ++i)
         {
             geo::Vec2 p = geo::Vec2(view.getRasterizer().project2Dto3DX(i), 1) * ranges[i];
-            geo::Vec2 p_canvas(p.x * 100 + canvas.cols / 2, canvas.rows - p.y * 100);
+            cv::Point p_canvas(p.x * 100 + canvas.cols / 2, canvas.rows - p.y * 100);
 
             if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
             {
-                canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(0, 255, 0);
+                cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 255, 0));
+//                canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(0, 255, 0);
             }
         }
 
         // Visualize
-        cv::imshow("depth", depth / 10);
+        cv::imshow("depth", depth2 / 10);
         cv::imshow("ranges", canvas);
+        cv::imshow("reprojection", reprojection / 10);
         cv::waitKey(3);
     }
 
