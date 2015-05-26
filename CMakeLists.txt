@@ -56,11 +56,9 @@ include_directories(
     ${OpenCV_INCLUDE_DIRS}
 )
 
-# add_library(library_name
-#     src/lib_source_file1.cpp
-#     ...
-# )
-# target_link_libraries(library_name ${catkin_LIBRARIES})
+#add_library(dml
+    #src/line_renderer.cpp   include/dml/line_renderer.h
+#)
 
 add_executable(dml_test test/dml_test.cpp)
 target_link_libraries(dml_test ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})

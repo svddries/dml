@@ -7,6 +7,145 @@
 
 #include <queue>
 
+typedef std::vector<unsigned int> ScanSegment;
+
+// ----------------------------------------------------------------------------------------------------
+
+void cluster(const std::vector<float>& sensor_ranges, std::vector<ScanSegment>& segments)
+{
+    std::size_t num_beams = sensor_ranges.size();
+
+    float segment_depth_threshold_ = 0.2;
+    int max_gap_size_ = 3;
+    int min_segment_size_pixels_ = 10;
+
+    // Find first valid value
+    ScanSegment current_segment;
+    for(unsigned int i = 0; i < num_beams; ++i)
+    {
+        if (sensor_ranges[i] > 0)
+        {
+            current_segment.push_back(i);
+            break;
+        }
+    }
+
+    if (current_segment.empty())
+    {
+        std::cout << "No residual point cloud!" << std::endl;
+        return;
+    }
+
+    int gap_size = 0;
+
+    for(unsigned int i = current_segment.front(); i < num_beams; ++i)
+    {
+        float rs = sensor_ranges[i];
+
+        if (rs == 0 || std::abs(rs - sensor_ranges[current_segment.back()]) > segment_depth_threshold_)
+        {
+            // Found a gap
+            ++gap_size;
+
+            if (gap_size >= max_gap_size_)
+            {
+                i = current_segment.back() + 1;
+
+                if (current_segment.size() >= min_segment_size_pixels_)
+                    segments.push_back(current_segment);
+
+                current_segment.clear();
+
+                // Find next good value
+                while(sensor_ranges[i] == 0 && i < num_beams)
+                    ++i;
+
+                current_segment.push_back(i);
+            }
+        }
+        else
+        {
+            gap_size = 0;
+            current_segment.push_back(i);
+        }
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+struct Line
+{
+    Line(unsigned int i_start_, unsigned int i_end_) : i_start(i_start_), i_end(i_end_) {}
+    unsigned int i_start;
+    unsigned int i_end;
+};
+
+// ----------------------------------------------------------------------------------------------------
+
+void extractLines(const std::vector<geo::Vec2>& points, double max_point_dist_sq,
+                  unsigned int i1, unsigned int i2, std::vector<Line>& lines)
+{
+    const geo::Vec2& p1 = points[i1];
+    const geo::Vec2& p2 = points[i2];
+
+    geo::Vec2 l = (p2 - p1).normalized();
+
+    int last_point_side = 0;
+
+    int i_pivot_point = -1;
+    double max_found_dist_sq = 0;
+
+    // Calculate distances of all points to the line
+    for(unsigned int i = i1; i <= i2; ++i)
+    {
+        const geo::Vec2& p = points[i];
+        geo::Vec2 p1_p = p - p1;
+
+        // Calculate distance of p to line (p1, p2)
+        float dist_sq = (p1_p - (p1_p.dot(l) * l)).length2();
+
+        if (dist_sq < max_point_dist_sq)
+        {
+            last_point_side = 0;
+            continue;
+        }
+
+        int point_side = ((l.x * p1_p.y - l.y * p1_p.x) < 0) ? -1 : 1;
+
+        if (point_side == last_point_side && dist_sq > max_found_dist_sq)
+        {
+            i_pivot_point = i;
+            max_found_dist_sq = dist_sq;
+        }
+
+        last_point_side = point_side;
+    }
+
+    if (i_pivot_point < 0)
+    {
+        // No breaking point found, so add the line!
+        if (i2 - i1 > 10)
+            lines.push_back(Line(i1, i2));
+    }
+    else
+    {
+        extractLines(points, max_point_dist_sq, i1, i_pivot_point, lines);
+        extractLines(points, max_point_dist_sq, i_pivot_point, i2, lines);
+    }
+}
+
+// ----------------------------------------------------------------------------------------------------
+
+void extractLines(const std::vector<geo::Vec2>& points, int init_set_size, double max_point_dist_sq, std::vector<Line>& lines)
+{
+    for(unsigned int i = 0; i < points.size() - init_set_size; i += init_set_size)
+    {
+        extractLines(points, max_point_dist_sq, i, i + init_set_size, lines);
+    }
+
+    // Todo: merge collinear line segments
+}
+
 // ----------------------------------------------------------------------------------------------------
 
 int main(int argc, char **argv)
@@ -96,8 +235,6 @@ int main(int argc, char **argv)
 
         // - - - - - - - - - - - - - - - - - -
 
-        std::cout << sensor_pose << std::endl;
-
         cv::Mat depth = rgbd_image->getDepthImage();
         cv::Mat depth2 = depth.clone();
 
@@ -107,7 +244,7 @@ int main(int argc, char **argv)
         cv::Mat canvas(depth.rows, depth.cols, CV_8UC3, cv::Scalar(0, 0, 0));
         cv::Mat reprojection(400, depth.cols, CV_32FC1, 0.0);
 
-        std::vector<float> ranges(depth.cols, 10);
+        std::vector<float> ranges(depth.cols, 0);
 
         for(int x = 0; x < depth.cols; ++x)
         {
@@ -136,7 +273,9 @@ int main(int argc, char **argv)
                 int i = (rasterizer.getFocalLengthX() * p_floor.x + rasterizer.getOpticalTranslationX()) / p_floor.y + rasterizer.getOpticalCenterX();
                 if (i >= 0 && i < ranges.size())
                 {
-                    ranges[i] = std::min<float>(ranges[i], p_floor.y);
+                    float& r = ranges[i];
+                    if (r == 0 || p_floor.y < r)
+                        r = p_floor.y;
 
                     cv::Point2i p_reprojection(i, (1.0 - p_floor.z / 2.0) * reprojection.rows);
                     if (p_reprojection.y >= 0 && p_reprojection.y < reprojection.rows)
@@ -159,10 +298,38 @@ int main(int argc, char **argv)
 
             if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
             {
-                cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 255, 0));
+//                cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 255, 0));
 //                canvas.at<cv::Vec3b>(p_canvas.y, p_canvas.x) = cv::Vec3b(0, 255, 0);
             }
         }
+
+        std::vector<geo::Vec2> points(ranges.size());
+        for(unsigned int i = 0; i < ranges.size(); ++i)
+            points[i] = geo::Vec2(view.getRasterizer().project2Dto3DX(i), 1) * ranges[i];
+
+        std::vector<Line> lines;
+        extractLines(points, 50, 0.02 * 0.02, lines);
+
+        for(std::vector<Line>::const_iterator it = lines.begin(); it != lines.end(); ++it)
+        {
+            const Line& line = *it;
+
+            unsigned int i1 = line.i_start;
+            unsigned int i2 = line.i_end;
+
+            geo::Vec2 p1 = geo::Vec2(view.getRasterizer().project2Dto3DX(i1), 1) * ranges[i1];
+            geo::Vec2 p2 = geo::Vec2(view.getRasterizer().project2Dto3DX(i2), 1) * ranges[i2];
+
+            cv::Point p1_canvas(p1.x * 100 + canvas.cols / 2, canvas.rows - p1.y * 100);
+            cv::Point p2_canvas(p2.x * 100 + canvas.cols / 2, canvas.rows - p2.y * 100);
+
+            cv::line(canvas, p1_canvas, p2_canvas, cv::Scalar(0, 0, 255), 1);
+            cv::circle(canvas, p1_canvas, 2, cv::Scalar(0, 0, 255), 2);
+            cv::circle(canvas, p2_canvas, 2, cv::Scalar(0, 0, 255), 2);
+
+        }
+
+        // - - - - - - - - - - - - - - - - - -
 
         // Visualize
         cv::imshow("depth", depth2 / 10);
