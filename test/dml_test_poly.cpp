@@ -69,6 +69,9 @@ void cluster(const std::vector<float>& sensor_ranges, std::vector<ScanSegment>& 
             current_segment.push_back(i);
         }
     }
+
+    if (current_segment.size() >= min_segment_size_pixels_)
+        segments.push_back(current_segment);
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -78,11 +81,12 @@ struct Line
     Line(unsigned int i_start_, unsigned int i_end_) : i_start(i_start_), i_end(i_end_) {}
     unsigned int i_start;
     unsigned int i_end;
+    geo::Vec2 v_normalized;
 };
 
 // ----------------------------------------------------------------------------------------------------
 
-void extractLines(const std::vector<geo::Vec2>& points, double max_point_dist_sq,
+void extractLines(const std::vector<geo::Vec2>& points, const std::vector<float>& ranges, double max_point_dist_sq,
                   unsigned int i1, unsigned int i2, std::vector<Line>& lines)
 {
     const geo::Vec2& p1 = points[i1];
@@ -98,13 +102,16 @@ void extractLines(const std::vector<geo::Vec2>& points, double max_point_dist_sq
     // Calculate distances of all points to the line
     for(unsigned int i = i1; i <= i2; ++i)
     {
+        if (ranges[i] == 0)
+            continue;
+
         const geo::Vec2& p = points[i];
         geo::Vec2 p1_p = p - p1;
 
         // Calculate distance of p to line (p1, p2)
         float dist_sq = (p1_p - (p1_p.dot(l) * l)).length2();
 
-        if (dist_sq < max_point_dist_sq)
+        if (dist_sq < max_point_dist_sq * ranges[i])
         {
             last_point_side = 0;
             continue;
@@ -125,25 +132,62 @@ void extractLines(const std::vector<geo::Vec2>& points, double max_point_dist_sq
     {
         // No breaking point found, so add the line!
         if (i2 - i1 > 10)
+        {
             lines.push_back(Line(i1, i2));
+            Line& l = lines.back();
+            l.v_normalized = (p2 - p1).normalized();
+        }
     }
     else
     {
-        extractLines(points, max_point_dist_sq, i1, i_pivot_point, lines);
-        extractLines(points, max_point_dist_sq, i_pivot_point, i2, lines);
+        extractLines(points, ranges, max_point_dist_sq, i1, i_pivot_point, lines);
+        extractLines(points, ranges, max_point_dist_sq, i_pivot_point, i2, lines);
     }
 }
 
 // ----------------------------------------------------------------------------------------------------
 
-void extractLines(const std::vector<geo::Vec2>& points, int init_set_size, double max_point_dist_sq, std::vector<Line>& lines)
+void extractLines(const std::vector<geo::Vec2>& points, const std::vector<float>& ranges,
+                  int init_set_size, double max_point_dist_sq, std::vector<Line>& lines)
 {
-    for(unsigned int i = 0; i < points.size() - init_set_size; i += init_set_size)
+    std::vector<ScanSegment> segments;
+    cluster(ranges, segments);
+
+    std::vector<Line> temp_lines;
+
+    for(std::vector<ScanSegment>::const_iterator it = segments.begin(); it != segments.end(); ++it)
     {
-        extractLines(points, max_point_dist_sq, i, i + init_set_size, lines);
+        const ScanSegment& seg = *it;
+
+        int i1 = seg.front();
+        int i2 = seg.back();
+
+        int i = i1;
+        for(; i < i2 - init_set_size; i += init_set_size)
+        {
+            extractLines(points, ranges, max_point_dist_sq, i, i + init_set_size, temp_lines);
+        }
+
+        extractLines(points, ranges, max_point_dist_sq, i, i2, temp_lines);
     }
 
-    // Todo: merge collinear line segments
+    if (temp_lines.empty())
+        return;
+
+    // Merge colinear line segments
+    const Line* last_line = &temp_lines[0];
+    for(unsigned int i = 1; i < temp_lines.size(); ++i)
+    {
+        const Line& line = temp_lines[i];
+
+        float dist_sq = (points[last_line->i_end] - points[line.i_start]).length2();
+
+        if (dist_sq > 0.05 * 0.05 || line.v_normalized.dot(last_line->v_normalized) < 0.95)
+        {
+            lines.push_back(Line(last_line->i_start, temp_lines[i - 1].i_end));
+            last_line = &line;
+        }
+    }
 }
 
 // ----------------------------------------------------------------------------------------------------
@@ -308,7 +352,7 @@ int main(int argc, char **argv)
             points[i] = geo::Vec2(view.getRasterizer().project2Dto3DX(i), 1) * ranges[i];
 
         std::vector<Line> lines;
-        extractLines(points, 50, 0.02 * 0.02, lines);
+        extractLines(points, ranges, 50, 0.1 * 0.1, lines);
 
         for(std::vector<Line>::const_iterator it = lines.begin(); it != lines.end(); ++it)
         {
