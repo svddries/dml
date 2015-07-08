@@ -89,10 +89,10 @@ int main(int argc, char **argv)
 {
     // MODEL
     std::vector<geo::Vec2> model;
-    model.push_back(geo::Vec2(-0.6, -0.4));
-    model.push_back(geo::Vec2( 0.6, -0.4));
-    model.push_back(geo::Vec2( 0.6,  0.4));
-    model.push_back(geo::Vec2(-0.6,  0.4));
+    model.push_back(geo::Vec2(-0.8, -0.4));
+    model.push_back(geo::Vec2( 0.8, -0.4));
+    model.push_back(geo::Vec2( 0.8,  0.4));
+    model.push_back(geo::Vec2(-0.8,  0.4));
 
 
     ros::init(argc, argv, "dml_test_poly");
@@ -249,6 +249,7 @@ int main(int argc, char **argv)
 
         double min_error = 1e9;
         std::vector<double> best_model_ranges;
+        geo::Transform2 best_pose;
 
         for(int i_beam = 0; i_beam < ranges.size(); ++i_beam)
         {
@@ -285,8 +286,16 @@ int main(int argc, char **argv)
                     double ds = ranges[i];
                     double dm = model_ranges[i];
 
-                    if (ds <= 0 || dm <= 0)
+                    if (ds <= 0)
                         continue;
+
+                    ++n;
+
+                    if (dm <= 0)
+                    {
+                        total_error += 0.1;
+                        continue;
+                    }
 
                     double diff = std::abs(ds - dm);
                     if (diff < 0.1)
@@ -298,8 +307,6 @@ int main(int argc, char **argv)
                         else
                             total_error += 0.1;
                     }
-
-                    ++n;
                 }
 
                 double error = total_error / n;
@@ -307,6 +314,7 @@ int main(int argc, char **argv)
                 if (error < min_error)
                 {
                     best_model_ranges = model_ranges;
+                    best_pose = pose;
                     min_error = error;
                 }
             }
@@ -320,6 +328,24 @@ int main(int argc, char **argv)
             if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
                 cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 0, 255));
         }
+
+        std::vector<geo::Vec2> t_vertices(model.size());
+        for(unsigned int i = 0; i < model.size(); ++i)
+            t_vertices[i] = best_pose * model[i];
+
+        for(unsigned int i = 0; i < model.size(); ++i)
+        {
+            unsigned int j = (i + 1) % model.size();
+            const geo::Vec2& p1 = t_vertices[i];
+            const geo::Vec2& p2 = t_vertices[j];
+
+            cv::Point p1_canvas(p1.x * 100 + canvas.cols / 2, canvas.rows - p1.y * 100);
+            cv::Point p2_canvas(p2.x * 100 + canvas.cols / 2, canvas.rows - p2.y * 100);
+
+            cv::line(canvas, p1_canvas, p2_canvas, cv::Scalar(0, 0, 255), 2);
+        }
+
+
 
 //        std::vector<geo::Vec2> points(ranges.size());
 //        for(unsigned int i = 0; i < ranges.size(); ++i)
