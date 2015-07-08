@@ -273,7 +273,8 @@ int main(int argc, char **argv)
         double roll, pitch, yaw;
         m.getRPY(roll, pitch, yaw);
 
-        sensor_pose.R.setRPY(roll, 0, 0);
+        sensor_pose.R.setRPY(roll, pitch, 0);
+
 
         std::cout << roll << " " << pitch << " " << yaw << std::endl;
 
