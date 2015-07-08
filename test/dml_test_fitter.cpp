@@ -47,8 +47,6 @@ public:
             const geo::Vec2& p1 = t_vertices[i];
             const geo::Vec2& p2 = t_vertices[j];
 
-            std::cout << p1 << " - " << p2 << std::endl;
-
             int i1 = CalculateBeam(p1.x, p1.y) + 1;
             int i2 = CalculateBeam(p2.x, p2.y);
 
@@ -249,34 +247,78 @@ int main(int argc, char **argv)
                 cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 255, 0));
         }
 
-        std::vector<double> model_ranges(ranges.size(), 0);
+        double min_error = 1e9;
+        std::vector<double> best_model_ranges;
 
-        double alpha = 1;
-        double cos_alpha = cos(alpha);
-        double sin_alpha = sin(alpha);
-        geo::Mat2 rot(cos_alpha, -sin_alpha, sin_alpha, cos_alpha);
-
-        beam_calculator.RenderModel(model, geo::Transform2(rot, geo::Vec2(0, 10)), model_ranges);
-
-        int i_beam = ranges.size() / 2;
-        double ds = ranges[i_beam];
-        double dr = model_ranges[i_beam];
-
-        if (ds > 0 && dr > 0)
+        for(int i_beam = 0; i_beam < ranges.size(); ++i_beam)
         {
-            model_ranges.resize(ranges.size(), 0);
-            beam_calculator.RenderModel(model, geo::Transform2(rot, geo::Vec2(0, 10 + ds - dr)), model_ranges);
+            double l = beam_calculator.rays()[i_beam].length();
 
-            for(unsigned int i = 0; i < model_ranges.size(); ++i)
+            geo::Vec2 r = beam_calculator.rays()[i_beam] / l;
+
+            for(double alpha = 0; alpha < 3.1415 * 2; alpha += 0.1)
             {
-                std::cout << i << ": " << model_ranges[i] << std::endl;
+                double cos_alpha = cos(alpha);
+                double sin_alpha = sin(alpha);
+                geo::Mat2 rot(cos_alpha, -sin_alpha, sin_alpha, cos_alpha);
 
-                geo::Vec2 p = beam_calculator.CalculatePoint(i, model_ranges[i]);
-                cv::Point p_canvas(p.x * 100 + canvas.cols / 2, canvas.rows - p.y * 100);
+                geo::Transform2 pose(rot, r * 10);
 
-                if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
-                    cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 0, 255));
+                std::vector<double> model_ranges(ranges.size(), 0);
+                beam_calculator.RenderModel(model, pose, model_ranges);
+
+                double ds = ranges[i_beam];
+                double dm = model_ranges[i_beam];
+
+                if (ds <= 0 || dm <= 0)
+                    continue;
+
+                pose.t += r * ((ds - dm) * l);
+
+                model_ranges.resize(ranges.size(), 0);
+                beam_calculator.RenderModel(model, pose, model_ranges);
+
+                int n = 0;
+                double total_error = 0;
+                for(unsigned int i = 0; i < model_ranges.size(); ++i)
+                {
+                    double ds = ranges[i];
+                    double dm = model_ranges[i];
+
+                    if (ds <= 0 || dm <= 0)
+                        continue;
+
+                    double diff = std::abs(ds - dm);
+                    if (diff < 0.1)
+                        total_error += diff;
+                    else
+                    {
+                        if (ds > dm)
+                            total_error += 1;
+                        else
+                            total_error += 0.1;
+                    }
+
+                    ++n;
+                }
+
+                double error = total_error / n;
+
+                if (error < min_error)
+                {
+                    best_model_ranges = model_ranges;
+                    min_error = error;
+                }
             }
+        }
+
+        for(unsigned int i = 0; i < best_model_ranges.size(); ++i)
+        {
+            geo::Vec2 p = beam_calculator.CalculatePoint(i, best_model_ranges[i]);
+            cv::Point p_canvas(p.x * 100 + canvas.cols / 2, canvas.rows - p.y * 100);
+
+            if (p_canvas.x >= 0 && p_canvas.y >= 0 && p_canvas.x < canvas.cols && p_canvas.y < canvas.rows)
+                cv::circle(canvas, p_canvas, 1, cv::Scalar(0, 0, 255));
         }
 
 //        std::vector<geo::Vec2> points(ranges.size());
