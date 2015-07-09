@@ -7,6 +7,9 @@
 
 #include <queue>
 
+#include <dml/mesh_tools.h>
+#include <geolib/Box.h>
+
 // ----------------------------------------------------------------------------------------------------
 
 class BeamCalculator
@@ -87,13 +90,28 @@ private:
 
 int main(int argc, char **argv)
 {
-    // MODEL
-    std::vector<geo::Vec2> model;
-    model.push_back(geo::Vec2(-0.8, -0.4));
-    model.push_back(geo::Vec2( 0.8, -0.4));
-    model.push_back(geo::Vec2( 0.8,  0.4));
-    model.push_back(geo::Vec2(-0.8,  0.4));
+    geo::Box box(geo::Vec3(-0.8, -0.4, 0), geo::Vec3(0.8, 0.4, 0.75));
 
+    std::vector<std::vector<geo::Vec2> > contours;
+    dml::project2D(box.getMesh(), contours);
+
+    for(unsigned int i = 0; i < contours.size(); ++i)
+    {
+        std::cout << "Contour " << i << std::endl;
+        const std::vector<geo::Vec2>& contour = contours[i];
+        for(unsigned int j = 0; j < contour.size(); ++j)
+            std::cout << "    " << contour[j] << std::endl;
+        std::cout << std::endl;
+    }
+
+    if (contours.empty())
+    {
+        std::cout << "Could not create model contour" << std::endl;
+        return 0;
+    }
+
+    // MODEL
+    std::vector<geo::Vec2> model = contours.front();
 
     ros::init(argc, argv, "dml_test_poly");
     ros::NodeHandle nh;
