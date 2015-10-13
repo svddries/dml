@@ -57,7 +57,8 @@ include_directories(
 )
 
 add_library(dml
-    src/mesh_tools.cpp   include/dml/mesh_tools.h
+    src/mesh_tools.cpp       include/dml/mesh_tools.h
+    include/dml/line_estimator.h
 )
 
 target_link_libraries(dml ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
@@ -75,3 +76,6 @@ target_link_libraries(dml_test_poly ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
 add_executable(dml_test_fitter test/dml_test_fitter.cpp)
 target_link_libraries(dml_test_fitter dml ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+add_executable(dml_test_line_estimator test/test_line_estimator.cpp)
+target_link_libraries(dml_test_line_estimator dml ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
