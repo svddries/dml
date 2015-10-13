@@ -81,6 +81,17 @@ public:
         window_size_ = w;
     }
 
+    bool filled() const
+    {
+        return x_.filled();
+    }
+
+    void latest(double* x, double* y)
+    {
+        *x = x_.latest();
+        *y = y_.latest();
+    }
+
     void addPoint(double x, double y)
     {
         if (x_.filled())
@@ -102,7 +113,7 @@ public:
 
     // Estimates line: y = constant + slope * x
     // Returns false if the number of points added is less than the window size
-    bool calculateLineEstimate(double* constant, double* slope)
+    bool calculateLineEstimate(double* constant, double* slope) const
     {
         if (!x_.filled())
             return false;
