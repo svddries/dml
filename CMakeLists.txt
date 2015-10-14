@@ -85,3 +85,6 @@ target_link_libraries(dml_test_line_estimator dml ${catkin_LIBRARIES} ${OpenCV_L
 
 add_executable(dml_test_ground_filter2 test/dml_test_ground_filter2.cpp)
 target_link_libraries(dml_test_ground_filter2 dml ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+
+add_executable(dml_test_ground_filter3 test/dml_test_ground_filter3.cpp)
+target_link_libraries(dml_test_ground_filter3 dml ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
