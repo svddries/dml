@@ -29,18 +29,19 @@ void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv:
     const geo::DepthCamera& rasterizer = view.getRasterizer();
 
     cv::Mat obstacle_map(500, 500, CV_32FC1, 0.0);
+    cv::Mat bla = depth.clone();
 
     if (!buffer.data)
-        buffer = cv::Mat(height, width, CV_64FC4, 0.0);
+        buffer = cv::Mat(height, 1, CV_64FC4, 0.0);
 
     int x_step = 1;
+    int edge_window_size = 30;
 
     for(int x = 0; x < width; x += x_step)
-        buffer.at<cv::Vec4d>(0, x) = cv::Vec4d(0, 0, 0, 0);
-
-    for(int y = 1; y < height; ++y)
     {
-        for(int x = 0; x < width; x += x_step)
+        buffer.at<cv::Vec4d>(0, 0) = cv::Vec4d(0, 0, 0, 0);
+
+        for(int y = 1; y < height; ++y)
         {
             float d = depth.at<float>(y, x);
             if (d == 0 || d != d)
@@ -65,34 +66,25 @@ void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv:
             //            xy_sum_ += x * y;
             //            x2_sum_ += x * x;
 
-            buffer.at<cv::Vec4d>(y, x) = buffer.at<cv::Vec4d>(y - 1, x)
-                    + cv::Vec4d(p_floor.y, p_floor.z, p_floor.y * p_floor.z, p_floor.y * p_floor.y);
+            buffer.at<cv::Vec4d>(y, 0) = buffer.at<cv::Vec4d>(y - 1, 0)
+                        + cv::Vec4d(p_floor.y, p_floor.z, p_floor.y * p_floor.z, p_floor.y * p_floor.y);
         }
-    }
 
-    std::cout << "    " << timer.getElapsedTimeInMilliSec() << " ms" << std::endl;
-
-    cv::Mat bla = depth.clone();
-
-    unsigned int edge_window_size = 30;
-
-    for(int y = edge_window_size; y < height - edge_window_size; ++y)
-    {
-        for(int x = 0; x < width; x += x_step)
+        for(int y = edge_window_size; y < height - edge_window_size; ++y)
         {
             float d = depth.at<float>(y, x);
             if (d == 0 || d != d)
                 continue;
 
-            const cv::Vec4d& bm = buffer.at<cv::Vec4d>(y, x);
+            const cv::Vec4d& bm = buffer.at<cv::Vec4d>(y, 0);
 
             double c1, s1;
-            cv::Vec4d b1 = bm - buffer.at<cv::Vec4d>(y - edge_window_size, x);
+            cv::Vec4d b1 = bm - buffer.at<cv::Vec4d>(y - edge_window_size, 0);
             s1 = (edge_window_size * b1[2] - b1[0] * b1[1]) / (edge_window_size * b1[3] - b1[0] * b1[0]);
             //            c1 = b1[1] / edge_window_size - s1 * (b1[0] / edge_window_size);
 
             double c2, s2;
-            cv::Vec4d b2 = buffer.at<cv::Vec4d>(y + edge_window_size, x) - bm;
+            cv::Vec4d b2 = buffer.at<cv::Vec4d>(y + edge_window_size, 0) - bm;
             s2 = (edge_window_size * b2[2] - b2[0] * b2[1]) / (edge_window_size * b2[3] - b2[0] * b2[0]);
             //            c2 = b2[1] / edge_window_size - s1 * (b2[0] / edge_window_size);
 
