@@ -16,7 +16,7 @@
 
 // ----------------------------------------------------------------------------------------------------
 
-void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv::Mat& buffer)
+void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose)
 {
     Timer timer;
 
@@ -31,8 +31,8 @@ void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv:
     cv::Mat obstacle_map(500, 500, CV_32FC1, 0.0);
     cv::Mat bla = depth.clone();
 
-    if (!buffer.data)
-        buffer = cv::Mat(height, 1, CV_64FC4, 0.0);
+    cv::Mat buffer(height, 1, CV_64FC4, 0.0);
+    std::vector<geo::Vector3> p_floors(height);
 
     int x_step = 1;
     int edge_window_size = 30;
@@ -46,12 +46,13 @@ void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv:
             float d = depth.at<float>(y, x);
             if (d == 0 || d != d)
             {
-                buffer.at<cv::Vec4d>(y, x) = buffer.at<cv::Vec4d>(y - 1, x);
+                buffer.at<cv::Vec4d>(y, 0) = buffer.at<cv::Vec4d>(y - 1, 0);
                 continue;
             }
 
             geo::Vector3 p_sensor = rasterizer.project2Dto3D(x, y) * d;
-            geo::Vector3 p_floor = sensor_pose * p_sensor;
+            p_floors[y] = sensor_pose * p_sensor;
+            const geo::Vector3& p_floor = p_floors[y];
 
             if (p_floor.z > 0.2)
             {
@@ -76,21 +77,32 @@ void findObstacles(const rgbd::Image& image, const geo::Pose3D& sensor_pose, cv:
             if (d == 0 || d != d)
                 continue;
 
-            const cv::Vec4d& bm = buffer.at<cv::Vec4d>(y, 0);
+            const geo::Vector3& p_floor = p_floors[y];
 
-            double c1, s1;
-            cv::Vec4d b1 = bm - buffer.at<cv::Vec4d>(y - edge_window_size, 0);
-            s1 = (edge_window_size * b1[2] - b1[0] * b1[1]) / (edge_window_size * b1[3] - b1[0] * b1[0]);
-            //            c1 = b1[1] / edge_window_size - s1 * (b1[0] / edge_window_size);
-
-            double c2, s2;
-            cv::Vec4d b2 = buffer.at<cv::Vec4d>(y + edge_window_size, 0) - bm;
-            s2 = (edge_window_size * b2[2] - b2[0] * b2[1]) / (edge_window_size * b2[3] - b2[0] * b2[0]);
-            //            c2 = b2[1] / edge_window_size - s1 * (b2[0] / edge_window_size);
-
-            if (std::abs(s1) > 0.7 && std::abs(s2) < 0.7)
+            if (p_floor.z < 0.2)
             {
-                bla.at<float>(y, x) = 10;
+//                const cv::Vec4d& bm = buffer.at<cv::Vec4d>(y, 0);
+
+//                double c1, s1;
+//                cv::Vec4d b1 = bm - buffer.at<cv::Vec4d>(y - edge_window_size, 0);
+//                s1 = (edge_window_size * b1[2] - b1[0] * b1[1]) / (edge_window_size * b1[3] - b1[0] * b1[0]);
+                //            c1 = b1[1] / edge_window_size - s1 * (b1[0] / edge_window_size);
+
+                double c2, s2;
+                cv::Vec4d b2 = buffer.at<cv::Vec4d>(y + edge_window_size / 2, 0)
+                        - buffer.at<cv::Vec4d>(y - edge_window_size / 2, 0);
+                s2 = (edge_window_size * b2[2] - b2[0] * b2[1]) / (edge_window_size * b2[3] - b2[0] * b2[0]);
+                //            c2 = b2[1] / edge_window_size - s1 * (b2[0] / edge_window_size);
+
+//                if (std::abs(s1) > 1 && std::abs(s2) < 1)
+                if (std::abs(s2) > 1)
+                {
+                    bla.at<float>(y, x) = 10;
+                    cv::Point2i p(p_floor.x * 50 + obstacle_map.rows / 2,
+                                  obstacle_map.cols / 2 - p_floor.y * 50);
+                    if (p.x >= 0 && p.x < obstacle_map.cols && p.y >= 0 && p.y < obstacle_map.rows)
+                        obstacle_map.at<float>(p) = 1;
+                }
             }
         }
     }
@@ -118,8 +130,6 @@ int main(int argc, char **argv)
     tf::TransformListener tf_listener;
 
     std::queue<rgbd::ImageConstPtr> image_buffer;
-
-    cv::Mat buffer;
 
     ros::Rate r(30);
     while (ros::ok())
@@ -196,7 +206,7 @@ int main(int argc, char **argv)
 
         // - - - - - - - - - - - - - - - - - -
 
-        findObstacles(*rgbd_image, sensor_pose, buffer);
+        findObstacles(*rgbd_image, sensor_pose);
     }
 
     return 0;
